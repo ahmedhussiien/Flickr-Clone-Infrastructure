@@ -222,3 +222,38 @@ resource "azurerm_storage_account" "this" {
 
   tags = local.tags
 }
+
+##############################################################################
+#
+# * VM Usage alert
+#
+##############################################################################
+resource "azurerm_monitor_action_group" "this" {
+  name                = "${var.prefix}-actiongroup"
+  short_name          = var.prefix
+  resource_group_name = azurerm_resource_group.this.name
+
+  email_receiver {
+    name          = var.alert_mailbox_name
+    email_address = var.alert_mailbox
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "cpu_metric_alert" {
+  name                = "${var.prefix}-cpu-metricalert"
+  resource_group_name = azurerm_resource_group.this.name
+  scopes              = [azurerm_linux_virtual_machine.this.id]
+  description         = "Action will be triggered when Transactions count is greater than 70."
+
+  criteria {
+    metric_namespace = "Microsoft.Compute/virtualMachines"
+    metric_name      = "Percentage CPU"
+    aggregation      = "Average"
+    operator         = "GreaterThan"
+    threshold        = var.vm_cpu_threshold
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.this.id
+  }
+}

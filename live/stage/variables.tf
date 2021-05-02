@@ -122,3 +122,27 @@ variable "certbot_email" {
   description = "The email address used for certbot ssl notifications."
   type        = string
 }
+
+##############################################################################
+#
+# * Monitoring alerts
+#
+##############################################################################
+
+variable "alert_mailbox" {
+  description = "The email address used for monitoring alerts notifications."
+  type        = string
+}
+
+variable "alert_mailbox_name" {
+  description = "The name of the mail box used for monitoring alerts notifications."
+  default     = "sendtodevops"
+  type        = string
+}
+
+variable "vm_cpu_threshold" {
+  description = "The threshold at which an alert email will be send."
+  default     = 70
+  type        = number
+}
+
