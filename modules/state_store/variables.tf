@@ -1,7 +1,6 @@
-variable "prefix" {
-  description = "This prefix will be included in the name of some resources."
-  type        = string
-  default     = "env"
+variable "state_container_name" {
+  type    = string
+  default = "tfstate-container"
 }
 
 variable "storage_account_name" {

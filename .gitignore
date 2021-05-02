@@ -11,3 +11,9 @@ terraform.tfvars
 # keys
 *.pem
 *.key
+
+# backend configurations
+backend.hcl
+
+# terrform dependencies hash
+.terraform.lock.hcl

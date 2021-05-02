@@ -1,3 +1,3 @@
-output "state_container_name" {
+output "container_name" {
   value = azurerm_storage_container.this.name
 }
