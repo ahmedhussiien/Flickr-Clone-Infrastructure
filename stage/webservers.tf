@@ -10,94 +10,56 @@ variable "webservers_ssh_source_network" {
   default     = "*"
 }
 
-variable "webservers_domain_resource_group_name" {
-  description = "The resource group in which the Dns Zone exists."
-  type        = string
-}
-
-variable "webservers_dns_zone_name" {
-  description = "The DNS Zone where the resource exists."
-  type        = string
-}
-
-variable "webservers_dns_record_name" {
-  description = "The subdomain linked to your public ip."
-  type        = string
-}
-
 ##############################################################################
 #
 # * Variables - web servers
 #
 ##############################################################################
 
-variable "num_webservers" {
-  description = "Number of web servers to create. Defaults to 1"
-  type        = number
-  default     = 1
-}
-
-variable "vm_size" {
+variable "webservers_vm_size" {
   description = "Specifies the size of the virtual machine."
   default     = "Standard_B1ls"
   type        = string
 }
 
-variable "image_publisher" {
+variable "webservers_image_publisher" {
   description = "Name of the publisher of the image (az vm image list)"
   default     = "Canonical"
   type        = string
 }
 
-variable "image_offer" {
+variable "webservers_image_offer" {
   description = "Name of the offer (az vm image list)"
   default     = "UbuntuServer"
   type        = string
 }
 
-variable "image_sku" {
+variable "webservers_image_sku" {
   description = "Image SKU to apply (az vm image list)"
   default     = "18.04-LTS"
   type        = string
 }
 
-variable "image_version" {
+variable "webservers_image_version" {
   description = "Version of the image to apply (az vm image list)"
   default     = "latest"
   type        = string
 }
 
-variable "admin_username" {
+variable "webservers_admin_username" {
   description = "Administrator user name"
   default     = "adminuser"
 }
 
-variable "certbot_email" {
-  description = "The email address used for certbot ssl notifications."
-  type        = string
-}
-
 ##############################################################################
 #
-# * Variables - Monitoring alerts
+# * Variables - web servers configuration
 #
 ##############################################################################
 
-variable "alert_mailbox" {
-  description = "The email address used for monitoring alerts notifications."
+variable "webservers_config_repo_url" {
+  description = "Git repository containing the initial scripts"
   type        = string
-}
-
-variable "alert_mailbox_name" {
-  description = "The name of the mail box used for monitoring alerts notifications."
-  default     = "sendtodevops"
-  type        = string
-}
-
-variable "vm_cpu_threshold" {
-  description = "The threshold at which an alert email will be send."
-  default     = 70
-  type        = number
 }
 
 ##############################################################################
@@ -106,12 +68,6 @@ variable "vm_cpu_threshold" {
 #
 ##############################################################################
 
-resource "azurerm_subnet" "webservers" {
-  name                 = "${var.prefix}-webservers-subnet"
-  virtual_network_name = azurerm_virtual_network.this.name
-  resource_group_name  = azurerm_resource_group.this.name
-  address_prefixes     = ["10.0.0.0/24"]
-}
 
 resource "azurerm_network_security_group" "webservers" {
   name                = "${var.prefix}-webservers-nsg"
@@ -132,65 +88,33 @@ resource "azurerm_network_security_group" "webservers" {
   }
 
   security_rule {
-    name                       = "HTTPS"
-    priority                   = 301
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "443"
-    source_address_prefix      = "*"
-    destination_address_prefix = azurerm_public_ip.webservers_lb.ip_address
-  }
-
-  security_rule {
     name                       = "HTTP"
-    priority                   = 302
+    priority                   = 310
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "80"
     source_address_prefix      = "*"
-    destination_address_prefix = azurerm_public_ip.webservers_lb.ip_address
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "HTTPS"
+    priority                   = 320
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 }
 
-resource "azurerm_subnet_network_security_group_association" "webservers" {
-  subnet_id                 = azurerm_subnet.webservers.id
+resource "azurerm_network_interface_security_group_association" "webserver" {
+  network_interface_id      = azurerm_network_interface.webserver.id
   network_security_group_id = azurerm_network_security_group.webservers.id
-}
-
-##############################################################################
-#
-# * Load balancer
-#
-##############################################################################
-
-resource "azurerm_public_ip" "webservers_lb" {
-  name                = "${var.prefix}-webservers-lb-ip"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
-  allocation_method   = "Static"
-  tags                = local.tags
-}
-
-resource "azurerm_lb" "this" {
-  name                = "${var.prefix}-webservers-lb"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
-  tags                = local.tags
-
-  frontend_ip_configuration {
-    name                 = "${var.prefix}-webservers-lb-frontend-ipconfig"
-    public_ip_address_id = azurerm_public_ip.webservers_lb.id
-  }
-}
-
-resource "azurerm_lb_backend_address_pool" "webservers" {
-  name                = "${var.prefix}-webservers-lb-backend-pool"
-  resource_group_name = azurerm_resource_group.this.name
-  loadbalancer_id     = azurerm_lb.this.id
 }
 
 ##############################################################################
@@ -199,36 +123,29 @@ resource "azurerm_lb_backend_address_pool" "webservers" {
 #
 ##############################################################################
 
-resource "azurerm_public_ip" "webservers" {
-  count               = var.num_webservers
-  name                = "${var.prefix}-webserver${count.index}-ip"
+resource "azurerm_public_ip" "webserver" {
+  name                = "${var.prefix}-webserver-ip"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   allocation_method   = "Static"
   tags                = local.tags
 }
 
-resource "azurerm_network_interface" "webservers" {
-  count               = var.num_webservers
-  name                = "${var.prefix}-webserver${count.index}-nic"
+resource "azurerm_network_interface" "webserver" {
+  name                = "${var.prefix}-webserver-nic"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   tags                = local.tags
 
   ip_configuration {
-    name                          = "${var.prefix}-webserver${count.index}-ipconfig"
+    name                          = "${var.prefix}-webserver-ipconfig"
     private_ip_address_allocation = "Dynamic"
     subnet_id                     = azurerm_subnet.webservers.id
-    public_ip_address_id          = element(azurerm_public_ip.webservers.*.id, count.index)
+    public_ip_address_id          = azurerm_public_ip.webserver.id
   }
 }
 
-resource "azurerm_network_interface_backend_address_pool_association" "webservers" {
-  count                   = var.num_webservers
-  network_interface_id    = element(azurerm_network_interface.webservers.*.id, count.index)
-  ip_configuration_name   = "${var.prefix}-webserver${count.index}-ipconfig"
-  backend_address_pool_id = azurerm_lb_backend_address_pool.webservers.id
-}
+
 
 ##############################################################################
 #
@@ -236,62 +153,63 @@ resource "azurerm_network_interface_backend_address_pool_association" "webserver
 #
 ##############################################################################
 
-resource "azurerm_linux_virtual_machine" "webservers" {
-  count               = var.num_webservers
-  name                = "${var.prefix}-webserver${count.index}"
+resource "azurerm_linux_virtual_machine" "webserver" {
+  name                = "${var.prefix}-webserver"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
-  size                = var.vm_size
+  size                = var.webservers_vm_size
   tags                = local.tags
 
-  network_interface_ids = [element(azurerm_network_interface.webservers.*.id, count.index)]
+  network_interface_ids = [azurerm_network_interface.webserver.id, ]
 
   source_image_reference {
-    publisher = var.image_publisher
-    offer     = var.image_offer
-    sku       = var.image_sku
-    version   = var.image_version
+    publisher = var.webservers_image_publisher
+    offer     = var.webservers_image_offer
+    sku       = var.webservers_image_sku
+    version   = var.webservers_image_version
   }
 
   os_disk {
-    name                 = "${var.prefix}-webserver${count.index}-osdisk"
+    name                 = "${var.prefix}-webserver-osdisk"
     storage_account_type = "Standard_LRS"
     caching              = "ReadWrite"
   }
 
   computer_name  = var.prefix
-  admin_username = var.admin_username
+  admin_username = var.webservers_admin_username
 
   admin_ssh_key {
-    username   = var.admin_username
+    username   = var.webservers_admin_username
     public_key = file("keys/webservers.pem")
   }
 
   provisioner "file" {
-    source      = "scripts"
-    destination = "/home/${var.admin_username}"
+    source      = "scripts/install-docker.sh"
+    destination = "/home/${var.webservers_admin_username}/install-docker.sh"
 
     connection {
       type        = "ssh"
-      user        = var.admin_username
+      user        = var.webservers_admin_username
       private_key = file("keys/webservers.key")
-      host        = element(azurerm_public_ip.webservers.*.ip_address, count.index)
+      host        = azurerm_public_ip.webserver.ip_address
     }
   }
 
   provisioner "remote-exec" {
     inline = [
-      "chmod +x /home/${var.admin_username}/scripts/*",
-      "sudo /home/${var.admin_username}/scripts/install-docker.sh",
-      "sudo /home/${var.admin_username}/scripts/install-certbot.sh",
-      "sudo /home/${var.admin_username}/scripts/issue-cert.sh ${local.webservers_domain} ${var.certbot_email}",
+      "chmod +x /home/${var.webservers_admin_username}/install-docker.sh",
+      "sudo /home/${var.webservers_admin_username}/install-docker.sh",
+
+      "GIT_SSH_COMMAND=\"ssh -o StrictHostKeyChecking=no\" git clone --depth 1 ${var.webservers_config_repo_url} /home/${var.webservers_admin_username}/git-tmp",
+      "cp -a /home/${var.webservers_admin_username}/git-tmp/* /home/${var.webservers_admin_username}/",
+      "sudo rm -r /home/${var.webservers_admin_username}/git-tmp"
     ]
 
     connection {
       type        = "ssh"
-      user        = var.admin_username
+      user        = var.webservers_admin_username
       private_key = file("keys/webservers.key")
-      host        = element(azurerm_public_ip.webservers.*.ip_address, count.index)
+      host        = azurerm_public_ip.webserver.ip_address
     }
   }
 }
@@ -302,22 +220,13 @@ resource "azurerm_linux_virtual_machine" "webservers" {
 #
 ##############################################################################
 
-resource "azurerm_monitor_action_group" "webservers" {
-  name                = "${var.prefix}-webservers-actiongroup"
-  short_name          = var.prefix
+resource "azurerm_monitor_metric_alert" "webserver_cpu" {
+  name                = "${var.prefix}-webserver-cpu-metricalert"
   resource_group_name = azurerm_resource_group.this.name
 
-  email_receiver {
-    name          = var.alert_mailbox_name
-    email_address = var.alert_mailbox
-  }
-}
+  scopes = [azurerm_linux_virtual_machine.webserver.id]
 
-resource "azurerm_monitor_metric_alert" "webservers_cpu" {
-  name                = "${var.prefix}-webservers-cpu-metricalert"
-  resource_group_name = azurerm_resource_group.this.name
-  scopes              = azurerm_linux_virtual_machine.webservers[*].id
-  description         = "Action will be triggered when Transactions count is greater than ${var.vm_cpu_threshold}."
+  description = "Action will be triggered when CPU utilization is greater than ${var.vm_cpu_threshold}."
 
   criteria {
     metric_namespace = "Microsoft.Compute/virtualMachines"
@@ -328,30 +237,8 @@ resource "azurerm_monitor_metric_alert" "webservers_cpu" {
   }
 
   action {
-    action_group_id = azurerm_monitor_action_group.webservers.id
+    action_group_id = azurerm_monitor_action_group.devops.id
   }
-}
-
-##############################################################################
-#
-# * Create DNS records
-#
-##############################################################################
-
-resource "azurerm_dns_a_record" "this" {
-  name                = var.webservers_dns_record_name
-  zone_name           = var.webservers_dns_zone_name
-  resource_group_name = var.webservers_domain_resource_group_name
-  ttl                 = 300
-  target_resource_id  = azurerm_public_ip.webservers_lb.id
-}
-
-resource "azurerm_dns_a_record" "www_this" {
-  name                = "www.${var.webservers_dns_record_name}"
-  zone_name           = var.webservers_dns_zone_name
-  resource_group_name = var.webservers_domain_resource_group_name
-  ttl                 = 300
-  target_resource_id  = azurerm_public_ip.webservers_lb.id
 }
 
 ##############################################################################
@@ -360,10 +247,6 @@ resource "azurerm_dns_a_record" "www_this" {
 #
 ##############################################################################
 
-output "webservers_load_balancer_ip" {
-  value = azurerm_public_ip.webservers_lb.ip_address
-}
-
-output "webservers_public_ips" {
-  value = azurerm_public_ip.webservers[*].id
+output "webservers_public_ip" {
+  value = azurerm_public_ip.webserver.ip_address
 }
