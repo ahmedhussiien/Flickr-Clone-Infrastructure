@@ -15,11 +15,24 @@ variable "dns_zone_name" {
   type        = string
 }
 
+variable "jenkins_dns_record_name" {
+  description = "The DNS Zone where the resource exists."
+  type        = string
+}
+
 ##############################################################################
 #
 # * DNS records
 #
 ##############################################################################
+
+resource "azurerm_dns_a_record" "jenkins" {
+  name                = var.jenkins_dns_record_name
+  zone_name           = var.dns_zone_name
+  resource_group_name = var.domain_resource_group_name
+  ttl                 = 300
+  target_resource_id  = azurerm_public_ip.jenkins.id
+}
 
 resource "azurerm_dns_a_record" "webservers" {
   name                = "@"
